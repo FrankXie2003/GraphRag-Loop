@@ -1,0 +1,27 @@
+# --- 密钥与环境配置:绝不提交 ---
+.env
+*.env
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# --- 模型缓存 / 数据 ---
+.cache/
+models_cache/
+*.bin
+*.safetensors
+
+# --- Docker 数据卷(本地持久化目录) ---
+.docker-data/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

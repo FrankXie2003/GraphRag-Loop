@@ -1,0 +1,9 @@
+# Phase 0 — 最小闭环 Demo 依赖
+#
+# 本阶段刻意做到「零第三方依赖」:只用 Python 标准库即可运行
+#   python run_demo.py
+# 所以下面默认全部注释掉。
+#
+# 仅当你想用句向量打分(python run_demo.py --embedding)时,才解开下面两行:
+# sentence-transformers>=2.2.0
+# numpy>=1.24.0

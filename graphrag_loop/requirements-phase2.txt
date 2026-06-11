@@ -1,0 +1,16 @@
+# Phase 2 — 完整 Self-RAG 三层反思 依赖(在 Phase 1 基础上叠加)
+# 安装:先 pip install -r requirements-phase1.txt,再 pip install -r requirements-phase2.txt
+-r requirements-phase1.txt
+
+# --- Self-RAG 反思组件 ---
+# IsSup / IsRel 用 NLI 蕴含模型(段级证据验证,比 LLM 自评便宜可量化)
+# NLI 模型本身通过 sentence-transformers / transformers 加载,无需额外包
+transformers>=4.40.0          # 加载 NLI / 蕴含模型
+
+# --- Agent 编排(把 entry→loop→generation→issup→refeed 串成状态机) ---
+langgraph>=0.1.0
+langchain-core>=0.2.0         # langgraph 依赖的核心抽象
+
+# --- PPR 入口扩散 ---
+# 小图用 networkx 在内存算;大图改用 Neo4j GDS 插件(无需 pip 包,装在 Neo4j 端)
+networkx>=3.2

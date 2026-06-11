@@ -1,0 +1,16 @@
+# Phase 3 — 多模态扩展 依赖(在 Phase 2 基础上叠加)
+# 安装:pip install -r requirements-phase2.txt && pip install -r requirements-phase3.txt
+-r requirements-phase2.txt
+
+# --- 对象存储(原始大文件) ---
+minio>=7.2.0                  # MinIO / S3 兼容客户端
+
+# --- 多模态特征提取 ---
+# 图片:CLIP / ViT  |  音频:Whisper  |  视频:抽帧 + CLIP
+open-clip-torch>=2.24.0       # CLIP 视觉 + 文本编码(跨模态检索)
+openai-whisper>=20231117      # 音频转写 + 特征
+pillow>=10.0.0                # 图片读取/抽帧
+opencv-python>=4.9.0          # 视频抽帧
+
+# --- 全文检索(可选,混合召回) ---
+elasticsearch>=8.13.0

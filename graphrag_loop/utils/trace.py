@@ -1,7 +1,6 @@
-"""轨迹记录与打印 —— 让人一眼看懂每跳发生了什么。
+"""轨迹记录与打印 —— 看清每跳发生了什么(逐跳候选/打分/保留/剪枝/置信度)。
 
-逐跳打印:frontier、扩展出的候选及得分、谁被保留谁被砍(及原因)、置信度、是否停止。
-这是验证 loop 正确性的主要窗口。
+逻辑契约与 demo/utils/trace.py 一致(Phase 0 已验证),graphrag_loop 自包含版本。
 """
 
 
@@ -26,14 +25,16 @@ class Tracer:
         else:
             print(f"  扩展候选({len(candidates)} 个,已按分排序):")
             kept_set = set(id(c) for c in kept)
+            # 被保留的最低分:低于它且未保留 = 被剪枝;不低于它但未保留 = 被 beam 截断
+            kept_min = min((c.score for c in kept), default=0.0)
             for c in sorted(candidates, key=lambda x: x.score, reverse=True):
                 arrow = f"-[{c.relation}]->" if c.direction == "out" else f"<-[{c.relation}]-"
                 if id(c) in kept_set:
                     mark = "[KEEP] 保留"
-                elif c.score < self.tau_rel:
-                    mark = f"[DROP] 剪枝(score<{self.tau_rel})"
-                else:
+                elif c.score >= kept_min and kept:
                     mark = "[DROP] 截断(超出 beam_width)"
+                else:
+                    mark = "[DROP] 剪枝(未达剪枝线)"
                 print(f"     [{c.score:4.2f}] {c.parent} {arrow} {c.node}  {mark}")
         print(f"  → 决策: {'停止' if decision.stop else '继续'} "
               f"(conf={decision.confidence:.2f}) — {decision.reason}")
@@ -51,12 +52,8 @@ class Tracer:
 
 
 def build_answer(query, state):
-    """Phase 0:基于证据子图用模板拼答案(非真 LLM 生成)。
-
-    真实系统里这步是 generation/generator.py:把证据子图喂给 LLM 生成带引用的答案。
-    demo 只把检索到的证据路径作为"答案依据"列出,证明 loop 产出可用于生成。
-    """
+    """Phase 1:基于证据子图用模板拼答案(生成留到 generation/generator.py 接 LLM)。"""
     nodes = sorted(state.evidence_nodes)
     return (f"\n[模板答案] 针对「{query}」,检索在 {len(state.evidence_edges)} 步内"
             f"触达 {len(nodes)} 个证据节点:{nodes}。\n"
-            f"          (真实系统在此把证据子图交给 LLM 生成自然语言答案。)")
+            f"          (后续由 generation/generator.py 把证据子图交给 LLM 生成自然语言答案。)")

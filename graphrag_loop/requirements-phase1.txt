@@ -1,0 +1,26 @@
+# Phase 1 — 单模态文本 GraphRAG 依赖
+# 接真组件:Neo4j 图谱 + 向量库 + Cross-Encoder 重排 + LLM Agent 决策
+# 配合 docker-compose 起 Neo4j / Qdrant 等有状态服务(见仓库根 docker-compose.yml)。
+# 建议用 venv:python -m venv .venv && .venv\Scripts\activate && pip install -r requirements.txt
+
+# --- 图数据库 ---
+neo4j>=5.20.0                 # 官方 Bolt driver,跑 Cypher
+
+# --- 向量库(二选一,默认 Qdrant) ---
+qdrant-client>=1.9.0
+# chromadb>=0.5.0             # 轻量原型可换 Chroma
+
+# --- Embedding / 重排 ---
+sentence-transformers>=2.7.0  # bge-m3 等 embedding + bge-reranker cross-encoder
+torch>=2.2.0                  # sentence-transformers 后端
+
+# --- LLM 调用(按你用的厂商保留其一) ---
+# openai>=1.30.0                # 或兼容 OpenAI 协议的国产模型网关
+dashscope>=1.17.0           # 通义千问
+# zhipuai>=2.1.0              # 智谱
+
+# --- 通用 ---
+numpy>=1.24.0
+pydantic>=2.7.0               # 配置 / 数据结构校验
+python-dotenv>=1.0.0          # 从 .env 读连接配置和密钥
+tqdm>=4.66.0                  # 建图进度条
