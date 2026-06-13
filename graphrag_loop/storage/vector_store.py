@@ -48,13 +48,22 @@ class VectorStore:
         ]
         self._client.upsert(collection_name=self.collection, points=points)
 
-    def search(self, query_vector, top_k=5):
-        """ANN 检索,返回 [(payload, score), ...] 按相似度降序。"""
-        # qdrant-client 1.10+ 用 query_points 替代弃用的 search
-        resp = self._client.query_points(
+    def search(self, query_vector, top_k=5, type_filter=None):
+        """ANN 检索,返回 [(payload, score), ...] 按相似度降序。
+
+        type_filter:可选字符串(如 'entity' / 'event'),按 payload.type 过滤。
+        双层 schema 用法:事实问只搜 entity 向量;情节/续写问只搜 event content 向量。
+        """
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        kwargs = dict(
             collection_name=self.collection,
             query=query_vector,
             limit=top_k,
             with_payload=True,
         )
+        if type_filter:
+            kwargs["query_filter"] = Filter(must=[FieldCondition(
+                key="type", match=MatchValue(value=type_filter))])
+        # qdrant-client 1.10+ 用 query_points 替代弃用的 search
+        resp = self._client.query_points(**kwargs)
         return [(p.payload, p.score) for p in resp.points]

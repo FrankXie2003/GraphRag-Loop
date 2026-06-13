@@ -43,16 +43,22 @@ class GraphStore:
     def get_neighbors(self, node, undirected=True):
         """返回 node 的邻居:[(relation, neighbor, direction), ...]
 
-        节点用 name 属性标识(与建图时一致)。direction 'out'/'in'。
+        契约同 Phase 1(loop 不用改),但双层 schema 下放宽节点标签:
+        既遍历 Entity-Entity 静态关系,也遍历 Entity-Event(PARTICIPATES)
+        和 Event-Event(NEXT),让事件节点自然参与 BFS。
+        节点用 name 属性标识。direction 'out'/'in'。
         """
+        # 不限定 m 的标签(可为 Entity 或 Event);n 也按 name 匹配两类
         cypher = """
-        MATCH (n:Entity {name: $name})-[r]->(m:Entity)
+        MATCH (n {name: $name})-[r]->(m)
+        WHERE (n:Entity OR n:Event) AND (m:Entity OR m:Event)
         RETURN type(r) AS rel, m.name AS nbr, 'out' AS dir
         """
         if undirected:
             cypher += """
             UNION
-            MATCH (n:Entity {name: $name})<-[r]-(m:Entity)
+            MATCH (n {name: $name})<-[r]-(m)
+            WHERE (n:Entity OR n:Event) AND (m:Entity OR m:Event)
             RETURN type(r) AS rel, m.name AS nbr, 'in' AS dir
             """
         with self._session() as s:
@@ -60,11 +66,44 @@ class GraphStore:
                     for rec in s.run(cypher, name=node)]
 
     def describe(self, node):
-        """返回节点的文本描述(供 ranker 打分);无则退回名字。"""
-        cypher = "MATCH (n:Entity {name:$name}) RETURN n.desc AS desc"
+        """返回节点的文本描述(供 ranker 打分);无则退回名字。
+
+        Event 节点返回其 content(情节描述)—— 这正是事件节点化的价值:
+        给 cross-encoder 打分的是有信息量的情节文本,而非干瘪的关系名。
+        Entity 节点返回 desc。
+        """
+        cypher = """
+        MATCH (n {name:$name}) WHERE n:Entity OR n:Event
+        RETURN coalesce(n.content, n.desc) AS text
+        """
         with self._session() as s:
             rec = s.run(cypher, name=node).single()
-            return (rec and rec["desc"]) or node
+            return (rec and rec["text"]) or node
+
+    def get_node_info(self, names):
+        """批量查节点元数据,返回 {name: {'type':'entity'|'event', 'content':str|None}}。
+
+        Phase 2 双层适配用:loop 每轮结束需要把"本轮新加进证据子图的节点"分成
+        Entity / Event 两类,Event 还要拿到 content 给 LLM 决策读。逐个 describe()
+        会触发 N 次往返,这里一次查清。
+        """
+        if not names:
+            return {}
+        cypher = """
+        MATCH (n) WHERE n.name IN $names AND (n:Entity OR n:Event)
+        RETURN n.name AS name,
+               CASE WHEN n:Event THEN 'event' ELSE 'entity' END AS type,
+               n.content AS content,
+               n.desc AS desc
+        """
+        info = {}
+        with self._session() as s:
+            for rec in s.run(cypher, names=list(names)):
+                info[rec["name"]] = {
+                    "type": rec["type"],
+                    "content": rec["content"] or rec["desc"],
+                }
+        return info
 
     # ---------- 建图:供 ingestion 调用 ----------
 
@@ -87,6 +126,37 @@ class GraphStore:
         """
         with self._session() as s:
             s.run(cypher, head=head, tail=tail)
+
+    # ---------- 双层 schema(Phase 2):事件节点与三类边 ----------
+
+    def upsert_event(self, name, content, chunk_id=None, order=None):
+        """建/更新 Event 节点(厚节点,带情节 content)。"""
+        cypher = """
+        MERGE (e:Event {name:$name})
+        SET e.content = $content, e.chunk_id = $chunk_id, e.order = $order
+        """
+        with self._session() as s:
+            s.run(cypher, name=name, content=content,
+                  chunk_id=chunk_id, order=order)
+
+    def upsert_participation(self, entity, event):
+        """(:Entity)-[:PARTICIPATES]->(:Event):谁参与了事件。"""
+        cypher = """
+        MERGE (n:Entity {name:$entity})
+        MERGE (e:Event {name:$event})
+        MERGE (n)-[:PARTICIPATES]->(e)
+        """
+        with self._session() as s:
+            s.run(cypher, entity=entity, event=event)
+
+    def upsert_event_sequence(self, prev_event, next_event):
+        """(:Event)-[:NEXT]->(:Event):事件时序(续写必需)。"""
+        cypher = """
+        MATCH (a:Event {name:$prev}), (b:Event {name:$next})
+        MERGE (a)-[:NEXT]->(b)
+        """
+        with self._session() as s:
+            s.run(cypher, prev=prev_event, next=next_event)
 
     def clear(self):
         """清空图(开发期重建用)。"""

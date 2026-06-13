@@ -42,17 +42,22 @@ def extract_mentions(query, llm=None):
         return []
 
 
-def link_mention(mention, embedder, vec_store, top_k=3):
-    """把单个 mention 向量匹配到图节点,返回 [(name, score), ...]。"""
+def link_mention(mention, embedder, vec_store, top_k=3, type_filter=None):
+    """把单个 mention 向量匹配到图节点,返回 [(name, score), ...]。
+
+    type_filter:'entity'/'event'/None,默认不过滤。软链接通常用 'entity'
+    (mention 是人物/地点名,不该挂到事件节点上)。
+    """
     vec = embedder.encode(mention)
-    hits = vec_store.search(vec, top_k=top_k)
+    hits = vec_store.search(vec, top_k=top_k, type_filter=type_filter)
     return [(p.get("name"), score) for p, score in hits if p.get("name")]
 
 
-def soft_link(query, embedder, vec_store, llm=None, top_k=3):
+def soft_link(query, embedder, vec_store, llm=None, top_k=3, type_filter=None):
     """对 query 里每个 mention 做软链接,汇总候选节点 [(name, score), ...]。"""
     mentions = extract_mentions(query, llm=llm)
     candidates = []
     for m in mentions:
-        candidates.extend(link_mention(m, embedder, vec_store, top_k=top_k))
+        candidates.extend(link_mention(m, embedder, vec_store,
+                                       top_k=top_k, type_filter=type_filter))
     return candidates

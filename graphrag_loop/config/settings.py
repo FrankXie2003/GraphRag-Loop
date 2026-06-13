@@ -14,6 +14,11 @@ class HyperParams:
     # τ_rel 依赖打分器的分数分布:bge-reranker 经 sigmoid 后,无关项普遍聚在 0.50
     # 附近,需略高于 0.5 才能剪掉噪声(实测 0.52 可干净分离玩具图的信号/噪声)。
     # 换打分器或换数据集需重新校准此值。仅在 PRUNE_MODE='absolute' 时使用。
+    #
+    # Phase 2 观察:引入 Event 节点(content 长)后,reranker 对 Event 候选的打分
+    # 普遍偏高(0.50-0.55 范围),Entity 静态关系候选也聚在类似区间,导致信号/噪声
+    # 区分度变小。建议:1) 仍用 ratio 模式(默认),让阈值跟绝对分数脱钩;
+    # 2) 必要时把 PRUNE_RATIO 调高到 0.94-0.95 收紧;3) 跑 probe_scores.py 看实际分布。
     TAU_REL: float = 0.52     # IsRel / 重排剪枝阈值(绝对模式)
     THETA_STOP: float = 0.7   # 终止置信度阈值
 

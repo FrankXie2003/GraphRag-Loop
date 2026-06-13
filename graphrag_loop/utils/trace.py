@@ -43,7 +43,22 @@ class Tracer:
         print("\n" + "=" * 70)
         print(f"终止原因: {state.stop_reason}")
         print(f"最终置信度: {state.confidence:.2f}")
-        print(f"证据节点: {sorted(state.evidence_nodes)}")
+
+        # Phase 2:分层展示证据(若有 evidence_entities/events 则用双层视图)
+        has_dual = (hasattr(state, "evidence_entities") and
+                    hasattr(state, "evidence_events"))
+        if has_dual and (state.evidence_entities or state.evidence_events):
+            print(f"证据实体({len(state.evidence_entities)}): "
+                  f"{sorted(state.evidence_entities)}")
+            print(f"证据事件({len(state.evidence_events)}):")
+            for ev in state.evidence_events:
+                content = (ev.get("content") or "").replace("\n", " ")
+                if len(content) > 80:
+                    content = content[:80] + "..."
+                print(f"     ● {ev['name']}: {content}")
+        else:
+            print(f"证据节点: {sorted(state.evidence_nodes)}")
+
         print("证据子图(检索路径):")
         for c in state.evidence_edges:
             arrow = f"-[{c.relation}]->" if c.direction == "out" else f"<-[{c.relation}]-"

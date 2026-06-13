@@ -38,6 +38,8 @@ class EmbeddingConfig:
     model_local: str = os.getenv("EMBEDDING_MODEL_LOCAL", "BAAI/bge-m3")
     model_dashscope: str = os.getenv("EMBEDDING_MODEL_DASHSCOPE", "text-embedding-v3")
     reranker: str = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
+    # IsSup 用的 NLI 模型;留空则 IsSup 直接走 LLM 兜底(不下载 NLI 模型)
+    nli_model: str = os.getenv("NLI_MODEL", "")
 
 
 @dataclass(frozen=True)

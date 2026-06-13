@@ -20,6 +20,9 @@ models_cache/
 # --- Docker 数据卷(本地持久化目录) ---
 .docker-data/
 
+# --- 运行日志(每次 query 落盘 markdown,本地复盘用,不入版本)---
+graphrag_loop/logs/
+
 # --- IDE / OS ---
 .idea/
 .vscode/

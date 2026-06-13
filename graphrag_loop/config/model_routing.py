@@ -24,4 +24,5 @@ ROUTING = {
     "L3_generate":         Tier.LARGE,   # 最终答案生成
     "L3_issup":            Tier.NLI,     # 段级证据验证
     "ingest_extract":      Tier.LARGE,   # 建图:抽实体关系
+    "ingest_align":        Tier.LARGE,   # 建图:实体/关系对齐、矛盾消解
 }

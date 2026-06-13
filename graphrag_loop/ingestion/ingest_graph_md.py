@@ -21,6 +21,7 @@ sys.path.insert(0, str(_pkg))
 
 from ingestion.chunker import chunk_text
 from ingestion.extractors.entity_relation import extract_triples
+from ingestion.extractors.alignment import align
 from storage.graph_store import GraphStore
 from storage.vector_store import VectorStore
 from models.llm import LLMClient
@@ -53,14 +54,31 @@ def build(max_chars, keep):
 
     llm = LLMClient()
     all_triples = []
+    provenance = {}  # {(h,r,t): 原文块文本},供对齐时矛盾消解按原文裁决
     for c in chunks:
         triples = extract_triples(c.text, llm=llm)
         all_triples.extend(triples)
+        for tr in triples:
+            provenance.setdefault(tr, c.text)
         print(f"  块 {c.chunk_id}: {len(triples)} 条")
 
     # 去重
     uniq = list(dict.fromkeys(all_triples))
     print(f"\n合计 {len(all_triples)} 条,去重后 {len(uniq)} 条三元组。")
+
+    # 对齐:实体/关系归一 + 矛盾消解
+    print("对齐中(实体/关系归一、矛盾边消解)...")
+    aligned, report = align(uniq, llm=llm, provenance=provenance)
+    if report["entity_merges"]:
+        print(f"  实体合并 {len(report['entity_merges'])} 项: {report['entity_merges']}")
+    if report["relation_merges"]:
+        print(f"  关系合并 {len(report['relation_merges'])} 项: {report['relation_merges']}")
+    if report["contradictions_dropped"]:
+        print(f"  矛盾边丢弃 {len(report['contradictions_dropped'])} 对: {report['contradictions_dropped']}")
+    if report["resolved"]:
+        print(f"  矛盾边按原文裁决 {len(report['resolved'])} 条: {report['resolved']}")
+    print(f"  对齐前 {report['before']} 条 → 对齐后 {report['after']} 条")
+    uniq = aligned
 
     # 写 Neo4j
     graph = GraphStore()

@@ -15,6 +15,10 @@ class RerankerScorer:
     name = "bge-reranker (cross-encoder)"
 
     def __init__(self, model_name=None):
+        import os
+        # 强制离线加载:模型已在本地缓存,跳过 HF 联网检查,彻底避免网络抖动崩溃
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
         from sentence_transformers import CrossEncoder
         self._model = CrossEncoder(model_name or EMBEDDING.reranker)
 

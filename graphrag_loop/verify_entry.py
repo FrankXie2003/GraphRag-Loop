@@ -44,11 +44,11 @@ def main():
     mentions = extract_mentions(args.query, llm=llm)
     print(f"\n① LLM 抽出的实体提及(mention): {mentions}")
 
-    # ②③ 混合召回(整句向量 ∪ 软链接)→ 种子
-    print("\n②③ 混合召回 → 起始种子(按权重降序):")
+    # ②③ 混合召回(双型分路,Phase 2)
+    print("\n②③ 双型分路混合召回 → 起始种子(按权重降序):")
     seeds = hybrid_recall(args.query, embedder, vec, llm=llm)
-    for name, w in seeds:
-        print(f"     {name}  (weight={w:.3f})")
+    for name, w, ntype in seeds:
+        print(f"     [{ntype:6s}] {name}  (weight={w:.3f})")
 
     print("\n这些种子就是检索循环 BFS 的起点。")
 

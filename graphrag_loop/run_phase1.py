@@ -65,6 +65,8 @@ def parse_args():
                    choices=["ratio", "absolute", "gap"])
     p.add_argument("--ratio", type=float, default=PARAMS.PRUNE_RATIO)
     p.add_argument("--floor", type=float, default=PARAMS.PRUNE_FLOOR)
+    p.add_argument("--policy", choices=["rule", "llm"], default="llm",
+                   help="S5 决策策略:rule=规则版,llm=Self-RAG LLM 版(Phase 2 默认)")
     return p.parse_args()
 
 
@@ -73,11 +75,12 @@ def resolve_seeds(args, embedder, vec_store):
     if args.seeds:
         print(f"种子来源: 手动指定 {args.seeds}")
         return args.seeds
+    # Phase 2 双型分路召回返回 [(name, weight, type)]
     seeds_scored = hybrid_recall(args.query, embedder, vec_store)
-    print("种子来源: 入口召回(hybrid_recall)")
-    for name, w in seeds_scored:
-        print(f"    {name}  (weight={w:.3f})")
-    return [name for name, _ in seeds_scored]
+    print("种子来源: 入口召回(hybrid_recall,双型分路)")
+    for name, w, ntype in seeds_scored:
+        print(f"    [{ntype:6s}] {name}  (weight={w:.3f})")
+    return [name for name, _, _ in seeds_scored]
 
 
 def main():
@@ -95,12 +98,19 @@ def main():
     vec_store = VectorStore()
     seeds = resolve_seeds(args, embedder, vec_store)
 
-    policy = RuleBasedPolicy(theta_stop=config.THETA_STOP, d_max=config.D_MAX,
-                             answer_hint=args.answer_hint)
+    # S5 决策策略:rule(规则版)或 llm(Self-RAG)
+    if args.policy == "llm":
+        from loop.decision import LLMDecisionPolicy
+        policy = LLMDecisionPolicy(theta_stop=config.THETA_STOP,
+                                   d_max=config.D_MAX)
+    else:
+        policy = RuleBasedPolicy(theta_stop=config.THETA_STOP, d_max=config.D_MAX,
+                                 answer_hint=args.answer_hint)
     tracer = Tracer(tau_rel=config.TAU_REL, beam_width=config.BEAM_WIDTH)
 
     tracer.header(args.query, seeds, config)
     print(f"打分器: {ranker.name}")
+    print(f"决策策略: {args.policy}")
     print(f"剪枝模式: {config.PRUNE_MODE}"
           + (f"(ratio={config.PRUNE_RATIO}, floor={config.PRUNE_FLOOR})"
              if config.PRUNE_MODE != "absolute" else f"(τ_rel={config.TAU_REL})"))
