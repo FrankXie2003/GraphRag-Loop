@@ -1,4 +1,15 @@
-"""Phase 1 端到端检索 —— 检索循环接到真 Neo4j + bge-reranker。
+"""Phase 1 端到端检索(**历史保留**)—— 检索循环接到真 Neo4j + bge-reranker。
+
+──────────────────────────────────────────────────────────────────────
+⚠️  这是 Phase 1 单层 schema 的端到端入口,**没有生成 / IsSup / 回扩**。
+    日常使用请用 run_phase2.py(Phase 2 完整闭环:loop + 生成 + IsSup + refeed)。
+
+    保留原因:
+      - 验证"控制流契约一致"——run_phase1 和 run_phase2 共用 loop/ 模块,
+        证明 Phase 0→Phase 2 演进中循环逻辑一行未改(see question&solution.md #1 认知)
+      - 简单调试场景:只想看检索循环表现、不想跑生成 + IsSup 时
+      - 与 ingest_toy_data.py 配合,在玩具数据上做最小可跑实验
+──────────────────────────────────────────────────────────────────────
 
 用法(在 graphrag_loop/ 目录下,venv 已激活):
     python run_phase1.py

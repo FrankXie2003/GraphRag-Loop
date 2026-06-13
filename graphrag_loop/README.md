@@ -1,110 +1,165 @@
-# graphrag_loop — 完整架构
+# graphrag_loop —— 完整架构(Phase 1-2 已实现,Phase 3 占位)
 
-Phase 1-3 的生产级实现,分层模块化。依赖自下而上单向流动:
-`storage → ingestion / entry → loop ← reflection → generation → orchestration → api`
+分层模块化,依赖自下而上单向流动:
+`config / storage / models → ingestion / entry → loop ↔ reflection → generation → orchestration → api`
+
+## 状态图例
+
+| 标记 | 含义 |
+|------|------|
+| ✅ | 已实现并经测试验证 |
+| 🟡 | 历史保留(被新版替代,但保留作演进对照) |
+| ⏳ | 占位待实现(文件头有 `# TODO` 说明触发条件) |
+| ⛔ | 已删除(早期设计冗余) |
 
 ## 分层职责
 
-| 层 / 目录 | 职责 | 对应架构图 | Phase |
-|----------|------|-----------|-------|
-| `config/` | 全局超参、模型路由、连接配置 | §2.1 / §2.2 | 1 |
-| `storage/` | 各数据库客户端封装(Neo4j / 向量库 / 对象存储 / ES) | §4 | 1,3 |
-| `ingestion/` | 离线建图:抽实体关系、多模态特征提取、入库 | §4 流程 | 1,3 |
-| `entry/` | L1 入口决策 + L1b 混合入口召回(软链接 + PPR) | L1 / L1b | 1,2 |
-| `loop/` | Agent 检索主循环:Beam 扩展、关系剪枝、Beam 截断、决策 | 主循环 S1-S5 | 1 |
-| `reflection/` | Self-RAG 反思:Retrieve / IsRel / IsSup / IsUse | 三层反思 | 2 |
-| `generation/` | 基于证据子图生成 + 引用 + 定向回扩触发 | L3 | 1,2 |
-| `orchestration/` | 把以上串成一个端到端 pipeline(LangGraph 状态机) | 全图 | 1 |
-| `models/` | LLM / 重排 / NLI / embedding 的统一调用接口与分层路由 | §2.2 | 1 |
-| `api/` | 对外服务(FastAPI) | — | 1 |
-| `tests/` | 单测 + 端到端测试 | — | all |
+| 层 / 目录 | 职责 | 状态 |
+|----------|------|------|
+| `config/` | 全局超参、模型路由、连接配置 | ✅ |
+| `storage/` | Neo4j / Qdrant 客户端 + 多模态 / 全文检索占位 | ✅ 主用 / ⏳ object/fulltext |
+| `ingestion/` | 离线建图:抽实体关系、双层 schema、多模态占位 | ✅ |
+| `entry/` | L1 入口决策 + L1b 混合入口召回 + PPR 占位 | ✅ 主用 / ⏳ ppr |
+| `loop/` | Agent 检索主循环:Beam 扩展、剪枝、决策 | ✅ |
+| `reflection/` | Self-RAG 反思:Retrieve / IsRel / IsSup(IsUse 占位) | ✅ Retrieve+IsRel+IsSup / ⏳ IsUse |
+| `generation/` | 答案生成 + 引用 + 原子断言级 IsSup + 定向回扩 | ✅ |
+| `orchestration/` | LangGraph 编排 + 高频缓存(均占位) | ⏳ |
+| `models/` | LLM(DashScope)/ NLI / embedding 调用 | ✅ |
+| `api/` | FastAPI 对外服务 | ⏳ |
+| `tests/` | 单测套件(33/33 通过) | ✅ |
+| `utils/` | 轨迹打印 + 运行落盘 | ✅ |
 
-## 目录结构
+## 目录结构(标注真实状态)
+
 ```
 graphrag_loop/
-├── README.md
+├── README.md                  ← 本文件
+├── PHASE2.md                  ← Phase 2 过程文档(双层 schema + Self-RAG 反思 + 回扩)
+│
+├── run_phase2.py              ✅ 主入口:L1→入口召回→loop→生成→IsSup→refeed 完整闭环
+├── run_phase1.py              🟡 Phase 1 历史入口(只跑 loop,不含生成)
+├── run_tests.py               ✅ 一键跑所有单测(33/33,~30ms)
+│
+├── check_connections.py       ✅ 4 条线连通性自检(Neo4j/Qdrant/LLM/Embedding)
+├── verify_entry.py            ✅ 单测入口召回:query → 种子
+├── verify_reflection.py       ✅ 单测三个反思组件
+├── verify_nli.py              ✅ 单测 NLI 加载与 IsSup 7 用例
+├── probe_scores.py            ✅ Reranker 分数分布探针(τ_rel 校准用)
+│
 ├── config/
-│   ├── __init__.py
-│   ├── settings.py            # 超参 D_max/N/τ_rel/θ_stop/τ_sup/V_max...
-│   ├── model_routing.py       # 哪个环节用哪个模型(成本/延迟分层)
-│   └── connections.py         # Neo4j/向量库/MinIO/ES 连接配置
+│   ├── settings.py            ✅ 全局超参 D_MAX/BEAM/τ_rel/θ_stop/V_MAX/PRUNE_MODE...
+│   ├── model_routing.py       ✅ 环节→模型档位(成本/延迟分层)
+│   └── connections.py         ✅ Neo4j/Qdrant/DashScope/NLI 连接(从 .env 读)
+│
 ├── storage/
-│   ├── __init__.py
-│   ├── graph_store.py         # Neo4j 封装:邻居查询、Cypher、PPR 调用(GDS)
-│   ├── vector_store.py        # Qdrant/Chroma:ANN 检索、跨模态
-│   ├── object_store.py        # MinIO/S3:原始大文件存取
-│   └── fulltext_store.py      # Elasticsearch:关键词/布尔过滤
+│   ├── graph_store.py         ✅ Neo4j 封装:get_neighbors / 双层节点 / NEXT 时序 / GDS-PPR
+│   ├── vector_store.py        ✅ Qdrant 封装:type_filter 双型搜索
+│   ├── object_store.py        ⏳ TODO Phase 3:MinIO/S3
+│   └── fulltext_store.py      ⏳ TODO 可选:Elasticsearch BM25
+│
 ├── ingestion/
-│   ├── __init__.py
-│   ├── pipeline.py            # 建图总流程编排
-│   ├── chunker.py             # 文本分块
+│   ├── chunker.py             ✅ 按段落聚合分块,带 overlap
+│   ├── ingest_graph_md_v2.py  ✅ Phase 2 双层建图主脚本(Entity+Event+三类边)
+│   ├── ingest_graph_md.py     🟡 Phase 1 单层版(历史保留,见文件头)
+│   ├── ingest_toy_data.py     🟡 Phase 0→1 玩具数据迁移演示(历史保留)
+│   ├── pipeline.py            ⏳ TODO 可选重构:统一编排
 │   ├── extractors/
-│   │   ├── __init__.py
-│   │   ├── entity_relation.py # LLM 抽实体关系 → 三元组
-│   │   └── alignment.py       # 实体对齐 / 增量更新
+│   │   ├── event_relation.py  ✅ Phase 2 双层抽取:事件+静态关系
+│   │   ├── entity_relation.py 🟡 Phase 1 单层抽取(历史保留)
+│   │   └── alignment.py       ✅ 实体/关系归一 + 矛盾边消解
 │   └── multimodal/
-│       ├── __init__.py
-│       ├── image_encoder.py   # CLIP/ViT
-│       ├── audio_encoder.py   # Whisper
-│       └── video_encoder.py   # 抽帧 + CLIP
+│       ├── image_encoder.py   ⏳ TODO Phase 3:CLIP
+│       ├── audio_encoder.py   ⏳ TODO Phase 3:Whisper
+│       └── video_encoder.py   ⏳ TODO Phase 3:抽帧+CLIP
+│
 ├── entry/
-│   ├── __init__.py
-│   ├── route_decision.py      # L1 Retrieve:要不要走图谱
-│   ├── soft_linker.py         # L1b NER + 向量软链接 → 多候选节点
-│   ├── hybrid_recall.py       # 向量召回 ∪ 软链接,带权种子
-│   └── ppr.py                 # Personalized PageRank 入口预热/扩散
+│   ├── route_decision.py      ✅ L1 Retrieve:要不要走图谱
+│   ├── soft_linker.py         ✅ NER + 向量软链接 → entity 节点
+│   ├── hybrid_recall.py       ✅ 双型分路召回(entity + event)
+│   └── ppr.py                 ⏳ TODO 待 #10 暴露:PPR 扩散
+│
 ├── loop/
-│   ├── __init__.py
-│   ├── controller.py          # 主循环骨架(契约同 demo/agent/loop.py)
-│   ├── expand.py              # S1 邻居扩展
-│   ├── relation_prune.py      # S2 关系剪枝(ToG 式先选边)
-│   ├── beam.py                # S4 Beam 截断 + 路径记忆去重
-│   ├── decision.py            # S5 Agent 决策(LLM,双约束终止)
-│   └── state.py               # 循环状态:frontier/已访问边/证据/置信度
+│   ├── controller.py          ✅ 主循环 S1→S3→S4→S5(契约同 demo)
+│   ├── beam.py                ✅ expand + 三种剪枝模式(默认 ratio)
+│   ├── decision.py            ✅ Rule-based + LLMDecisionPolicy(Self-RAG)
+│   └── state.py               ✅ LoopState 双层证据(entities + events)
+│
 ├── reflection/
-│   ├── __init__.py
-│   ├── tokens.py              # 反思 token 枚举与三值定义
-│   ├── isrel.py               # S3 IsRel:Cross-Encoder/NLI 打分剪枝
-│   ├── issup.py               # L3 IsSup:段级 NLI 蕴含验证
-│   └── isuse.py               # IsUse:整体有用性(可选)
+│   ├── tokens.py              ✅ Retrieve / IsRel / IsSup / IsUse 枚举
+│   ├── isrel.py               ✅ bge-reranker cross-encoder
+│   ├── issup.py               ✅ NLI 优先 + LLM 兜底 + 假阴性兜底
+│   └── isuse.py               ⏳ TODO Phase 3:续写质量评分
+│
 ├── generation/
-│   ├── __init__.py
-│   ├── generator.py           # 证据子图 → 带引用答案
-│   ├── citation.py            # inline 引用对齐
-│   └── refeed.py              # 定向回扩:unsupported 段 → 回主循环(≤V_max)
+│   ├── generator.py           ✅ 双轨输出:text + atomic_claims(原子断言级)
+│   ├── citation.py            ✅ 引用对齐工具
+│   └── refeed.py              ✅ 逐条 IsSup + 缺口提取 + 指纹去重 + V_MAX 兜底
+│
 ├── orchestration/
-│   ├── __init__.py
-│   ├── graph_rag_agent.py     # 端到端编排(LangGraph 状态机)
-│   └── cache.py               # 高频子图模式缓存
+│   ├── graph_rag_agent.py     ⏳ TODO Phase 3:LangGraph 多 tool 编排
+│   └── cache.py               ⏳ TODO Phase 3+:高频子图缓存
+│
 ├── models/
-│   ├── __init__.py
-│   ├── llm.py                 # 大/小 LLM 统一接口
-│   ├── reranker.py            # bge-reranker Cross-Encoder
-│   ├── nli.py                 # 蕴含模型(IsSup/IsRel 可复用)
-│   └── embedding.py           # bge-m3 / CLIP 文本侧 / 多模态
+│   ├── llm.py                 ✅ DashScope 封装,按 routing 选大/小
+│   ├── nli.py                 ✅ mDeBERTa-v3-xnli(可选,优雅降级)
+│   └── embedding.py           ✅ bge-m3(本地)/ DashScope(可切)
+│
 ├── api/
-│   ├── __init__.py
-│   └── server.py              # FastAPI:/query 端点
-└── tests/
-    ├── __init__.py
-    ├── test_loop.py           # 循环控制流单测
-    ├── test_entry.py          # 入口召回/软链接
-    ├── test_reflection.py     # IsRel/IsSup 阈值
-    └── test_e2e.py            # 端到端
+│   └── server.py              ⏳ TODO Phase 3+:FastAPI /query
+│
+├── utils/
+│   ├── trace.py               ✅ 逐跳轨迹打印(stdout)
+│   └── recorder.py            ✅ 运行落盘到 logs/*.md
+│
+└── tests/                     ✅ 33/33 通过, ~30ms
+    ├── test_loop.py           ← beam / 剪枝 / 终止 / 双层证据
+    ├── test_entry.py          ← hybrid_recall 去重赋权
+    ├── test_reflection.py     ← generator / citation / atomic_claims / NLI 兜底 / 指纹
+    └── test_e2e.py            ← 玩具图谱端到端
 ```
 
 ## 依赖方向(避免循环依赖)
+
 ```
-config ──▶ 所有层
-storage ──▶ ingestion, entry, loop, generation
-models  ──▶ entry, loop, reflection, generation
-loop ◀──▶ reflection (loop 调 isrel;generation 触发 refeed 回 loop)
-orchestration ──▶ entry, loop, reflection, generation
-api ──▶ orchestration
+config / models ──▶ 所有层
+storage         ──▶ ingestion, entry, loop, generation
+loop ◀──▶ reflection           (loop 调 isrel;refeed 触发 loop)
+orchestration   ──▶ entry, loop, reflection, generation
+api             ──▶ orchestration
 ```
 
-## 渐进式接入建议
-1. 先 `storage/graph_store.py` + `loop/` 接通(把 demo 逻辑接真 Neo4j)
-2. 再 `entry/` 混合召回 + `reflection/isrel.py` 重排
-3. 再 `generation/` + `reflection/issup.py` + `refeed.py`
-4. 最后 `ingestion/multimodal/` + 多模态存储
+## 端到端入口
+
+```bash
+# 主入口(Phase 2 完整闭环)
+python run_phase2.py --query "甄士隐家中遭遇了哪些灾难"
+
+# 配置
+python run_phase2.py --policy {rule|llm}     # S5 决策策略
+python run_phase2.py --no-refeed              # 关闭定向回扩(对比)
+python run_phase2.py --vmax 3                 # 调最大回扩轮数
+
+# 单测(完全离线,33/33 应通过)
+python run_tests.py
+
+# 工具
+python check_connections.py                   # 基础设施自检
+python verify_entry.py --query "..."          # 看入口召回种子
+python probe_scores.py --query "..."          # 看 reranker 分数分布
+```
+
+## 渐进式接入建议(给未来的人)
+
+1. 先跑 `check_connections.py`,确认 4 条线全绿
+2. 跑 `python ingestion/ingest_graph_md_v2.py --probe --probe-chunk 8` 看抽取质量
+3. 全量建图 `python ingestion/ingest_graph_md_v2.py`
+4. 跑 `run_phase2.py --query "..."` 看完整闭环
+5. 看 `logs/*.md` 复盘
+6. 改 prompt 或超参 → 跑 `run_tests.py` 防回归
+
+## 相关文档
+
+- 主架构与设计哲学:仓库根 [README.md](../README.md)
+- 13 个真实问题与解法:仓库根 [question&solution.md](../question&solution.md)(最值钱的资产)
+- Phase 2 演进记录:[PHASE2.md](PHASE2.md)
+- 思考过程:仓库根 [think-about-node.md](../think-about-node.md)

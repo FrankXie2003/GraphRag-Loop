@@ -1,4 +1,14 @@
-"""Phase 1 最小建图:把 demo 玩具三元组灌进真 Neo4j + Qdrant。
+"""Phase 1 最小建图(**历史保留**):把 demo 玩具三元组灌进真 Neo4j + Qdrant。
+
+──────────────────────────────────────────────────────────────────────
+⚠️  这是 Phase 0→Phase 1 迁移期的对照演示脚本。
+    日常使用请用 ingest_graph_md_v2.py(Phase 2 双层 schema,真实数据)。
+
+    保留原因:
+      - 是"控制流契约一致是迁移安全网"这条经验的具体证据(question&solution.md 关键认知 #1)
+      - 用 demo 玩具数据验证"loop 接真图能跑"和"LLM 抽取准不准"的解耦
+      - run_phase1.py 仍引用此脚本,作为 Phase 1 端到端的对照可跑版本
+──────────────────────────────────────────────────────────────────────
 
 用法:
     python ingestion/ingest_toy_data.py
@@ -6,7 +16,7 @@
 作用:让真图里的数据和 demo 内存图一致,这样"loop 能不能在真图上跑"和"LLM 抽取准不准"
 就解耦了——先验证前者(loop 接真图),LLM 抽取留到下一阶段。
 
-会清空 Neo4j 和 Qdrant,慎用。生产数据用 ingestion/pipeline.py 那一套。
+会清空 Neo4j 和 Qdrant,慎用。生产数据用 ingest_graph_md_v2.py。
 """
 
 import sys

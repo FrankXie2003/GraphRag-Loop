@@ -1,4 +1,14 @@
-"""真实建图:graph.md(红楼梦第一回)→ chunk → LLM 抽三元组 → Neo4j + Qdrant。
+"""真实建图(Phase 1 单层版,**历史保留**):graph.md → chunk → LLM 抽三元组 → Neo4j + Qdrant。
+
+──────────────────────────────────────────────────────────────────────
+⚠️  这是 Phase 1 单层 schema 版本(只有 Entity 节点 + 静态关系)。
+    Phase 2 起请用 ingest_graph_md_v2.py(双层 Entity+Event 版,见主 README §3.5)。
+
+    保留原因:
+      - Phase 0→Phase 1→Phase 2 的演进对照(教学价值)
+      - 不需要事件节点的简单场景仍可用
+      - 与 entity_relation.py(只抽三元组)绑定,共同保留
+──────────────────────────────────────────────────────────────────────
 
 用法:
     python ingestion/ingest_graph_md.py --probe     # 只抽第1块,看抽取质量(省钱,先验证)

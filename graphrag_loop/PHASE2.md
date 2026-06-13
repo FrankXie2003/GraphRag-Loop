@@ -58,8 +58,10 @@ Qdrant(双类型 point):
 | 11 | P0-2 重复回扩检测(指纹相同则中止) | ✅ |
 | 12 | P0-3 τ_rel 重新校准 → probe_scores.py 实测后**保持 0.92** | ✅ 6/26 精准切噪声 |
 | 13 | P1-4 NLI 真接入(mDeBERTa-v3-xnli) | ✅ verify_nli 7/7 通过 |
-| 14 | P1-7 单测套件(stdlib unittest) | ✅ 21/21 通过, 33ms |
+| 14 | P1-7 单测套件(stdlib unittest) | ✅ 28/28 通过, 31ms |
 | 15 | P1-8 轨迹落地(logs/*.md) | ✅ |
+| 16 | **#13 IsSup 升级到原子断言级**(消除多事实假阳性) | ✅ generator 输出 atomic_claims + 逐条 NLI + 7 个新单测 |
+| 17 | **#13b NLI 假阴性兜底**(间接论元 + 实体重叠 → LLM)+ 指纹改语义不变量 | ✅ 4+1 个新单测,33/33 通过 |
 
 ---
 
